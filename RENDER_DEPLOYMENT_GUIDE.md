@@ -31,7 +31,7 @@ All necessary files are already created:
 ### Step 2: Create GitHub Repository
 
 1. Go to https://github.com and create a new repository
-2. Name it: `air-quality-collector`
+2. Name it: `api-integration`
 3. Initialize as public or private
 4. Push your code:
 
@@ -39,7 +39,7 @@ All necessary files are already created:
 cd "c:\Users\Samson Jose\Desktop\api integration"
 git init
 git add .
-git commit -m "Initial commit - Air Quality Collector"
+git commit -m "Initial commit - api-integration"
 git branch -M main
 git remote add origin https://github.com/YOUR_USERNAME/air-quality-collector.git
 git push -u origin main
