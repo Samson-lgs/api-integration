@@ -1,0 +1,12 @@
+FROM postgres:15-alpine
+
+# Install initialization script
+COPY backend/database/schema.sql /docker-entrypoint-initdb.d/
+
+# Set default environment variables
+ENV POSTGRES_DB=air_quality_db
+ENV POSTGRES_USER=postgres
+ENV POSTGRES_PASSWORD=postgres
+
+# Expose PostgreSQL port
+EXPOSE 5432

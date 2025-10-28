@@ -539,11 +539,133 @@ def refresh_views():
 @handle_errors
 def get_models_info():
     """Get information about loaded ML models"""
+    # Load metrics if available
+    metrics = {}
+    metrics_path = os.path.join(os.path.dirname(__file__), '..', 'models', 'metrics.json')
+    if os.path.exists(metrics_path):
+        import json
+        with open(metrics_path, 'r') as f:
+            metrics = json.load(f)
+    
     return jsonify({
         'status': 'success',
         'models_loaded': list(ML_MODELS.keys()),
         'scaler_loaded': SCALER is not None,
-        'total_models': len(ML_MODELS)
+        'total_models': len(ML_MODELS),
+        'metrics': metrics
+    })
+
+@app.route('/api/admin/models/reload', methods=['POST'])
+@handle_errors
+def reload_models():
+    """Reload ML models from disk"""
+    load_ml_models()
+    return jsonify({
+        'status': 'success',
+        'message': 'Models reloaded successfully',
+        'models_loaded': list(ML_MODELS.keys())
+    })
+
+@app.route('/api/admin/stats')
+@handle_errors
+def get_system_stats():
+    """Get system statistics and metrics"""
+    with db.get_connection() as conn:
+        with conn.cursor() as cursor:
+            # Database stats
+            cursor.execute("""
+                SELECT 
+                    (SELECT COUNT(*) FROM stations) as total_stations,
+                    (SELECT COUNT(*) FROM air_quality_data) as total_readings,
+                    (SELECT COUNT(*) FROM predictions) as total_predictions,
+                    (SELECT COUNT(DISTINCT city) FROM stations) as total_cities,
+                    (SELECT MIN(timestamp) FROM air_quality_data) as earliest_reading,
+                    (SELECT MAX(timestamp) FROM air_quality_data) as latest_reading
+            """)
+            stats = cursor.fetchone()
+            
+            # Recent activity
+            cursor.execute("""
+                SELECT 
+                    DATE(timestamp) as date,
+                    COUNT(*) as readings_count
+                FROM air_quality_data
+                WHERE timestamp >= NOW() - INTERVAL '7 days'
+                GROUP BY DATE(timestamp)
+                ORDER BY date DESC
+            """)
+            recent_activity = cursor.fetchall()
+    
+    return jsonify({
+        'status': 'success',
+        'database': {
+            'total_stations': stats[0],
+            'total_readings': stats[1],
+            'total_predictions': stats[2],
+            'total_cities': stats[3],
+            'earliest_reading': stats[4].isoformat() if stats[4] else None,
+            'latest_reading': stats[5].isoformat() if stats[5] else None
+        },
+        'recent_activity': [
+            {'date': str(row[0]), 'count': row[1]} 
+            for row in recent_activity
+        ],
+        'models': {
+            'loaded': len(ML_MODELS),
+            'available': list(ML_MODELS.keys())
+        }
+    })
+
+@app.route('/api/admin/data/cleanup', methods=['POST'])
+@handle_errors
+def cleanup_old_data():
+    """Clean up old data (older than retention period)"""
+    days = request.json.get('retention_days', 90)
+    
+    with db.get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                DELETE FROM air_quality_data
+                WHERE timestamp < NOW() - INTERVAL '%s days'
+                RETURNING COUNT(*)
+            """, (days,))
+            deleted_count = cursor.fetchone()[0]
+            conn.commit()
+    
+    return jsonify({
+        'status': 'success',
+        'message': f'Deleted {deleted_count} old records',
+        'retention_days': days
+    })
+
+@app.route('/api/monitoring/metrics')
+@handle_errors
+def get_monitoring_metrics():
+    """Get monitoring metrics for observability (Prometheus format compatible)"""
+    with db.get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_readings,
+                    COUNT(*) FILTER (WHERE timestamp >= NOW() - INTERVAL '1 hour') as readings_last_hour,
+                    COUNT(*) FILTER (WHERE timestamp >= NOW() - INTERVAL '24 hours') as readings_last_day,
+                    AVG(pm25) FILTER (WHERE timestamp >= NOW() - INTERVAL '1 hour') as avg_pm25_last_hour,
+                    MAX(aqi) FILTER (WHERE timestamp >= NOW() - INTERVAL '1 hour') as max_aqi_last_hour
+                FROM air_quality_data
+            """)
+            metrics = cursor.fetchone()
+    
+    return jsonify({
+        'status': 'success',
+        'timestamp': datetime.utcnow().isoformat(),
+        'metrics': {
+            'total_readings': metrics[0],
+            'readings_last_hour': metrics[1],
+            'readings_last_day': metrics[2],
+            'avg_pm25_last_hour': float(metrics[3]) if metrics[3] else 0,
+            'max_aqi_last_hour': metrics[4] if metrics[4] else 0,
+            'models_loaded': len(ML_MODELS)
+        }
     })
 
 # ============================================================================
