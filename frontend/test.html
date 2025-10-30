@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Connection Test</h1>
+    <div id="status">Testing...</div>
+    <div id="data"></div>
+    
+    <script>
+        async function testAPI() {
+            const statusDiv = document.getElementById('status');
+            const dataDiv = document.getElementById('data');
+            
+            try {
+                // Test health endpoint
+                const healthResponse = await fetch('http://localhost:5000/api/health');
+                const healthData = await healthResponse.json();
+                console.log('Health:', healthData);
+                
+                // Test stations endpoint
+                const stationsResponse = await fetch('http://localhost:5000/api/stations');
+                const stationsData = await stationsResponse.json();
+                console.log('Stations:', stationsData);
+                
+                // Test summary endpoint
+                const summaryResponse = await fetch('http://localhost:5000/api/analytics/summary');
+                const summaryData = await summaryResponse.json();
+                console.log('Summary:', summaryData);
+                
+                statusDiv.innerHTML = '<h2 style="color: green;">✓ All API endpoints working!</h2>';
+                dataDiv.innerHTML = `
+                    <h3>Health Status:</h3>
+                    <pre>${JSON.stringify(healthData, null, 2)}</pre>
+                    
+                    <h3>Station Count:</h3>
+                    <pre>${stationsData.count} stations found</pre>
+                    
+                    <h3>Summary:</h3>
+                    <pre>${JSON.stringify(summaryData.summary, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = '<h2 style="color: red;">✗ API Error</h2>';
+                dataDiv.innerHTML = `<pre style="color: red;">${error.message}</pre>`;
+            }
+        }
+        
+        testAPI();
+    </script>
+</body>
+</html>

@@ -74,6 +74,14 @@ export const apiService = {
   // Admin
   refreshViews: () => api.post('/admin/refresh-views'),
   getModelsInfo: () => api.get('/admin/models'),
+  
+  // Alerts
+  getAlertSettings: () => api.get('/alerts/settings'),
+  updateAlertEmail: (email) => api.post('/alerts/email', { email }),
+  createAlert: (alertData) => api.post('/alerts', alertData),
+  updateAlert: (alertId, data) => api.put(`/alerts/${alertId}`, data),
+  deleteAlert: (alertId) => api.delete(`/alerts/${alertId}`),
+  testAlert: (alertId) => api.post(`/alerts/${alertId}/test`),
 };
 
 export default apiService;

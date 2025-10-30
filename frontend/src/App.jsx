@@ -5,11 +5,13 @@
 
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Cloud, Activity, TrendingUp, MapPin, Settings } from 'lucide-react';
+import { Cloud, Activity, TrendingUp, MapPin, Settings, Bell, GitCompare } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import StationsPage from './pages/StationsPage';
 import PredictionsPage from './pages/PredictionsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import CityComparison from './pages/CityComparison';
+import AlertSettings from './pages/AlertSettings';
 import apiService from './services/api';
 
 function App() {
@@ -25,10 +27,12 @@ function App() {
   const checkHealth = async () => {
     try {
       const data = await apiService.health();
-      setHealthStatus(data);
+      console.log('Health check response:', data);
+      // Backend returns {status: 'ok', message: '...', timestamp: '...'}
+      setHealthStatus({ ...data, status: data.status === 'ok' ? 'healthy' : data.status });
     } catch (error) {
       console.error('Health check failed:', error);
-      setHealthStatus({ status: 'error' });
+      setHealthStatus({ status: 'error', message: 'API unreachable' });
     }
   };
 
@@ -95,6 +99,22 @@ function App() {
                 <Settings size={18} />
                 Analytics
               </Link>
+              <Link 
+                to="/comparison" 
+                className={`nav-link ${currentPage === 'comparison' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('comparison')}
+              >
+                <GitCompare size={18} />
+                Compare Cities
+              </Link>
+              <Link 
+                to="/alerts" 
+                className={`nav-link ${currentPage === 'alerts' ? 'active' : ''}`}
+                onClick={() => setCurrentPage('alerts')}
+              >
+                <Bell size={18} />
+                Alerts
+              </Link>
             </div>
           </div>
         </nav>
@@ -107,6 +127,8 @@ function App() {
               <Route path="/stations" element={<StationsPage />} />
               <Route path="/predictions" element={<PredictionsPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/comparison" element={<CityComparison />} />
+              <Route path="/alerts" element={<AlertSettings />} />
             </Routes>
           </div>
         </main>

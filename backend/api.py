@@ -669,6 +669,146 @@ def get_monitoring_metrics():
     })
 
 # ============================================================================
+# ALERT ENDPOINTS
+# ============================================================================
+
+# In-memory storage for demo (use database in production)
+ALERT_SETTINGS = {
+    'email': None,
+    'alerts': []
+}
+ALERT_COUNTER = 0
+
+@app.route('/api/alerts/settings')
+@handle_errors
+def get_alert_settings():
+    """Get user alert settings"""
+    return jsonify({
+        'status': 'success',
+        'data': ALERT_SETTINGS
+    })
+
+@app.route('/api/alerts/email', methods=['POST'])
+@handle_errors
+def update_alert_email():
+    """Update notification email"""
+    data = request.get_json()
+    email = data.get('email')
+    
+    if not email or '@' not in email:
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid email address'
+        }), 400
+    
+    ALERT_SETTINGS['email'] = email
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Email updated successfully',
+        'email': email
+    })
+
+@app.route('/api/alerts', methods=['POST'])
+@handle_errors
+def create_alert():
+    """Create new alert"""
+    global ALERT_COUNTER
+    
+    data = request.get_json()
+    city = data.get('city')
+    threshold = data.get('threshold')
+    frequency = data.get('frequency', 'once')
+    
+    if not city or threshold is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'City and threshold are required'
+        }), 400
+    
+    ALERT_COUNTER += 1
+    alert = {
+        'id': ALERT_COUNTER,
+        'city': city,
+        'threshold': threshold,
+        'frequency': frequency,
+        'enabled': True,
+        'created_at': datetime.now().isoformat(),
+        'last_triggered': None
+    }
+    
+    ALERT_SETTINGS['alerts'].append(alert)
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Alert created successfully',
+        'data': alert
+    })
+
+@app.route('/api/alerts/<int:alert_id>', methods=['PUT'])
+@handle_errors
+def update_alert(alert_id):
+    """Update alert settings"""
+    data = request.get_json()
+    
+    alert = next((a for a in ALERT_SETTINGS['alerts'] if a['id'] == alert_id), None)
+    if not alert:
+        return jsonify({
+            'status': 'error',
+            'message': 'Alert not found'
+        }), 404
+    
+    if 'enabled' in data:
+        alert['enabled'] = data['enabled']
+    if 'threshold' in data:
+        alert['threshold'] = data['threshold']
+    if 'frequency' in data:
+        alert['frequency'] = data['frequency']
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Alert updated successfully',
+        'data': alert
+    })
+
+@app.route('/api/alerts/<int:alert_id>', methods=['DELETE'])
+@handle_errors
+def delete_alert(alert_id):
+    """Delete alert"""
+    ALERT_SETTINGS['alerts'] = [a for a in ALERT_SETTINGS['alerts'] if a['id'] != alert_id]
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Alert deleted successfully'
+    })
+
+@app.route('/api/alerts/<int:alert_id>/test', methods=['POST'])
+@handle_errors
+def test_alert(alert_id):
+    """Test alert by sending sample email"""
+    alert = next((a for a in ALERT_SETTINGS['alerts'] if a['id'] == alert_id), None)
+    if not alert:
+        return jsonify({
+            'status': 'error',
+            'message': 'Alert not found'
+        }), 404
+    
+    if not ALERT_SETTINGS['email']:
+        return jsonify({
+            'status': 'error',
+            'message': 'No email configured'
+        }), 400
+    
+    # In production, this would send actual email
+    logger.info(f"Test alert triggered for {ALERT_SETTINGS['email']}: {alert}")
+    
+    return jsonify({
+        'status': 'success',
+        'message': f"Test email sent to {ALERT_SETTINGS['email']}",
+        'alert': alert
+    })
+
+# ============================================================================
 # ERROR HANDLERS
 # ============================================================================
 

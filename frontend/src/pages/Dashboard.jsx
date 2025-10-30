@@ -8,6 +8,8 @@ import { AlertCircle, MapPin, Activity, TrendingUp, Droplets } from 'lucide-reac
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import apiService from '../services/api';
+// import AQIMap from '../components/AQIMap'; // DISABLED - causing crashes
+import HealthImpact from '../components/HealthImpact';
 import '../App.css';
 
 function Dashboard() {
@@ -28,6 +30,8 @@ function Dashboard() {
       setLoading(true);
       setError(null);
 
+      console.log('Loading dashboard data...');
+
       // Load all data in parallel
       const [latestResponse, summaryResponse, trendsResponse, citiesResponse] = await Promise.all([
         apiService.getLatestData({ limit: 20, city: selectedCity || undefined }),
@@ -36,12 +40,22 @@ function Dashboard() {
         apiService.getCities()
       ]);
 
+      console.log('API Responses:', {
+        latest: latestResponse,
+        summary: summaryResponse,
+        trends: trendsResponse,
+        cities: citiesResponse
+      });
+
       setLatestData(latestResponse.data || []);
       setSummary(summaryResponse.summary || {});
       setTrends(trendsResponse.data || []);
       setCities(citiesResponse.data || []);
+      
+      console.log('Data loaded successfully');
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
+      console.error('Error details:', err.response || err.message);
       setError('Failed to load dashboard data. Please try again.');
     } finally {
       setLoading(false);
@@ -64,6 +78,7 @@ function Dashboard() {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
+        <p style={{ marginTop: '1rem', color: '#6b7280' }}>Loading dashboard data...</p>
       </div>
     );
   }
@@ -72,7 +87,50 @@ function Dashboard() {
     return (
       <div className="error-message">
         <AlertCircle size={20} />
-        {error}
+        <div>
+          <p>{error}</p>
+          <button 
+            onClick={loadDashboardData}
+            style={{
+              marginTop: '1rem',
+              padding: '0.5rem 1rem',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Safety check for data
+  if (!summary || !Array.isArray(latestData) || !Array.isArray(trends) || !Array.isArray(cities)) {
+    console.error('Invalid data structure:', { summary, latestData, trends, cities });
+    return (
+      <div className="error-message">
+        <AlertCircle size={20} />
+        <div>
+          <p>Invalid data received from server</p>
+          <button 
+            onClick={loadDashboardData}
+            style={{
+              marginTop: '1rem',
+              padding: '0.5rem 1rem',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -135,6 +193,96 @@ function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Real-time AQI Map - Placeholder */}
+      <div className="card" style={{ marginTop: '24px' }}>
+        <div className="card-header">
+          <h3 className="chart-title">Station Locations</h3>
+          <p className="text-sm text-muted">Monitoring stations across India</p>
+        </div>
+        <div style={{ padding: '16px' }}>
+          <div style={{ 
+            height: '400px', 
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: '12px',
+            overflowY: 'auto',
+            padding: '8px',
+            backgroundColor: '#f9fafb',
+            borderRadius: '8px'
+          }}>
+            {latestData && latestData.length > 0 ? (
+              latestData.map((station) => {
+                const aqiColor = 
+                  station.aqi <= 50 ? '#10b981' :
+                  station.aqi <= 100 ? '#fbbf24' :
+                  station.aqi <= 200 ? '#f97316' :
+                  station.aqi <= 300 ? '#ef4444' :
+                  station.aqi <= 400 ? '#8b5cf6' : '#991b1b';
+                
+                return (
+                  <div 
+                    key={station.id} 
+                    style={{
+                      padding: '12px',
+                      backgroundColor: 'white',
+                      borderRadius: '6px',
+                      borderLeft: `4px solid ${aqiColor}`,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                  >
+                    <div style={{ fontWeight: '600', fontSize: '0.9rem', marginBottom: '4px' }}>
+                      {station.name}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#6b7280', marginBottom: '8px' }}>
+                      {station.city}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        fontSize: '1.2rem',
+                        fontWeight: 'bold',
+                        color: aqiColor
+                      }}>
+                        {station.aqi}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                        PM2.5: {station.pm25?.toFixed(1)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p style={{ color: '#6b7280', gridColumn: '1 / -1', textAlign: 'center' }}>
+                No station data available
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Health Impact for Worst City */}
+      {latestData.length > 0 && (
+        <div style={{ marginTop: '24px' }}>
+          {(() => {
+            const worstStation = latestData.reduce((max, station) => 
+              (station.aqi || 0) > (max.aqi || 0) ? station : max
+            , latestData[0]);
+            
+            return (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="chart-title">Health Advisory - {worstStation.city}</h3>
+                  <p className="text-sm text-muted">Current air quality health implications</p>
+                </div>
+                <div style={{ padding: '16px' }}>
+                  <HealthImpact aqi={worstStation.aqi || 0} city={worstStation.city} />
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* PM2.5 Trends Chart */}
       {trends.length > 0 && (
@@ -207,7 +355,7 @@ function Dashboard() {
       <div className="data-table-container">
         <div className="table-header">
           <h3 className="mb-0">Latest Air Quality Readings</h3>
-          <span className="text-sm text-muted">{latestData.length} readings</span>
+          <span className="text-sm text-muted">{latestData.length} stations</span>
         </div>
         <div className="table-wrapper">
           <table className="data-table">
@@ -215,36 +363,41 @@ function Dashboard() {
               <tr>
                 <th>Station</th>
                 <th>City</th>
-                <th>Pollutant</th>
-                <th>Value</th>
                 <th>AQI</th>
-                <th>Category</th>
-                <th>Temperature</th>
-                <th>Humidity</th>
-                <th>Time</th>
+                <th>PM2.5</th>
+                <th>PM10</th>
+                <th>NO₂</th>
+                <th>SO₂</th>
+                <th>CO</th>
+                <th>Last Updated</th>
               </tr>
             </thead>
             <tbody>
               {latestData.length > 0 ? (
-                latestData.map((reading, index) => (
-                  <tr key={index}>
-                    <td className="font-medium">{reading.station_name}</td>
-                    <td>{reading.city}</td>
-                    <td>{reading.pollutant_id}</td>
-                    <td>{reading.pollutant_avg?.toFixed(2) || 'N/A'}</td>
-                    <td className="font-semibold">{reading.aqi?.toFixed(0) || 'N/A'}</td>
-                    <td>
-                      <span className={getAqiBadgeClass(reading.aqi_category)}>
-                        {reading.aqi_category || 'Unknown'}
-                      </span>
-                    </td>
-                    <td>{reading.temperature ? `${reading.temperature.toFixed(1)}°C` : 'N/A'}</td>
-                    <td>{reading.humidity ? `${reading.humidity.toFixed(0)}%` : 'N/A'}</td>
-                    <td className="text-sm text-muted">
-                      {reading.recorded_at ? format(new Date(reading.recorded_at), 'HH:mm:ss') : 'N/A'}
-                    </td>
-                  </tr>
-                ))
+                latestData.map((station, index) => {
+                  const aqiCategory = 
+                    station.aqi <= 50 ? 'Good' :
+                    station.aqi <= 100 ? 'Satisfactory' :
+                    station.aqi <= 200 ? 'Moderate' :
+                    station.aqi <= 300 ? 'Poor' :
+                    station.aqi <= 400 ? 'Very Poor' : 'Severe';
+                  
+                  return (
+                    <tr key={station.id || index}>
+                      <td className="font-medium">{station.name || 'N/A'}</td>
+                      <td>{station.city || 'N/A'}</td>
+                      <td className="font-semibold">{station.aqi || 'N/A'}</td>
+                      <td>{station.pm25?.toFixed(2) || 'N/A'}</td>
+                      <td>{station.pm10?.toFixed(2) || 'N/A'}</td>
+                      <td>{station.no2?.toFixed(2) || 'N/A'}</td>
+                      <td>{station.so2?.toFixed(2) || 'N/A'}</td>
+                      <td>{station.co?.toFixed(2) || 'N/A'}</td>
+                      <td className="text-sm text-muted">
+                        {station.last_updated ? format(new Date(station.last_updated), 'MMM dd, HH:mm') : 'N/A'}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="9" className="text-center text-muted">

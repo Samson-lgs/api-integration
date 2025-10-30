@@ -18,15 +18,18 @@ services:
       mountPath: /var/lib/postgresql/data
       sizeGB: 10
 
-  # Backend API Service
+  # Backend API Service (Production with ML Models)
   - type: web
-    name: air-quality-api
-    env: docker
+    name: aqi-prediction-api
+    env: python
     plan: standard
     region: oregon
-    dockerfilePath: ./Dockerfile.backend
+    buildCommand: pip install -r requirements.txt && python -c "from backend.database.db_manager import init_database; init_database()"
+    startCommand: python backend/production_api.py
     healthCheckPath: /api/health
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: DATABASE_URL
         fromDatabase:
           name: air-quality-postgres
@@ -36,74 +39,51 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://air-quality-monitor.onrender.com
-      - key: MODEL_PATH
-        value: ./models
-      - key: AUTO_RETRAIN
-        value: true
-      - key: RETRAIN_INTERVAL_HOURS
-        value: 24
+        value: https://aqi-prediction-frontend.onrender.com
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: IQAIR_API_KEY
+        sync: false
+      - key: CPCB_API_KEY
+        sync: false
     autoDeploy: true
-    scaling:
-      minInstances: 1
-      maxInstances: 3
-      targetCPUPercent: 75
-      targetMemoryPercent: 80
 
-  # Frontend Service
+  # Frontend Service (React + Vite)
   - type: web
-    name: air-quality-frontend
-    env: docker
+    name: aqi-prediction-frontend
+    env: static
     plan: starter
     region: oregon
-    dockerfilePath: ./Dockerfile.frontend
-    healthCheckPath: /
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
     envVars:
+      - key: NODE_VERSION
+        value: 18.x
       - key: VITE_API_URL
-        fromService:
-          name: air-quality-api
-          type: web
-          property: host
+        value: https://aqi-prediction-api.onrender.com
     autoDeploy: true
 
-  # Data Collector Background Worker
+  # Automated Data Collection & Prediction Worker
   - type: worker
-    name: air-quality-collector
-    env: docker
+    name: aqi-automated-scheduler
+    env: python
     plan: starter
     region: oregon
-    dockerfilePath: ./Dockerfile.backend
-    dockerCommand: python scheduled_collector.py
+    buildCommand: pip install -r requirements.txt
+    startCommand: python automated_scheduler.py
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: DATABASE_URL
         fromDatabase:
           name: air-quality-postgres
           property: connectionString
-      - key: COLLECTION_INTERVAL_MINUTES
-        value: 60
-    autoDeploy: true
-
-  # Model Retraining Worker
-  - type: worker
-    name: air-quality-retrainer
-    env: docker
-    plan: standard
-    region: oregon
-    dockerfilePath: ./Dockerfile.backend
-    dockerCommand: python automated_retraining.py
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: air-quality-postgres
-          property: connectionString
-      - key: RETRAIN_INTERVAL_HOURS
-        value: 24
-      - key: MIN_NEW_SAMPLES
-        value: 100
-      - key: MODEL_PATH
-        value: ./models
-      - key: PERFORMANCE_THRESHOLD
-        value: 0.1
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: IQAIR_API_KEY
+        sync: false
+      - key: CPCB_API_KEY
+        sync: false
     autoDeploy: true
 
 databases:
